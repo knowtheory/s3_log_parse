@@ -1,0 +1,44 @@
+[root]
+name = "s3_log_parser"
+version = "0.0.1"
+dependencies = [
+ "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl)",
+ "postgres 0.0.0 (git+https://github.com/sfackler/rust-postgres)",
+]
+
+[[package]]
+name = "openssl"
+version = "0.0.0"
+source = "git+https://github.com/sfackler/rust-openssl#b41201c3c9fddf42d02f71d11b5d4718eb9e88c4"
+
+[[package]]
+name = "phf"
+version = "0.0.0"
+source = "git+https://github.com/sfackler/rust-phf#83a8116c71bf1cbf28d51d269b4c214e13748509"
+dependencies = [
+ "xxhash 0.0.1 (git+https://github.com/Jurily/rust-xxhash)",
+]
+
+[[package]]
+name = "phf_mac"
+version = "0.0.0"
+source = "git+https://github.com/sfackler/rust-phf#83a8116c71bf1cbf28d51d269b4c214e13748509"
+dependencies = [
+ "xxhash 0.0.1 (git+https://github.com/Jurily/rust-xxhash)",
+]
+
+[[package]]
+name = "postgres"
+version = "0.0.0"
+source = "git+https://github.com/sfackler/rust-postgres#4a9ca42b20a75a656a5424fc682adc767ebd2d39"
+dependencies = [
+ "openssl 0.0.0 (git+https://github.com/sfackler/rust-openssl)",
+ "phf 0.0.0 (git+https://github.com/sfackler/rust-phf)",
+ "phf_mac 0.0.0 (git+https://github.com/sfackler/rust-phf)",
+]
+
+[[package]]
+name = "xxhash"
+version = "0.0.1"
+source = "git+https://github.com/Jurily/rust-xxhash#b1361187f6480f80551e49b248f61b8ccf6d2c53"
+

@@ -1,0 +1,11 @@
+[package]
+
+name = "s3_log_parser"
+version = "0.0.1"
+authors = ["Ted Han <ted@knowtheory.net>"]
+
+[dependencies.openssl]
+git = "https://github.com/sfackler/rust-openssl"
+
+[dependencies.postgres]
+git = "https://github.com/sfackler/rust-postgres"
