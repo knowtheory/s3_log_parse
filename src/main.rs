@@ -17,17 +17,17 @@ struct Entry {
       request_uri:      String,
       status_code:      String,
       error_code:       String,
-      bytes_sent:       String,
-      object_size:      String,
-      total_time:       String,
-      turn_around_time: String,
+      bytes_sent:       uint,
+      object_size:      uint,
+      total_time:       uint,
+      turn_around_time: uint,
       referrer:         String,
       user_agent:       String,
       version_id:       String,
 }
 
 fn entry_for(values: Vec<String>) -> Entry {
-    if values.len() <= 17 { println!("{}", values); }
+    if values.len() <= 17 { println!("Incorrect number of fields in: {}", values); }
     //println!("{}", values.len());
     Entry {
         bucket_owner:     values[0].to_string(),
@@ -41,10 +41,10 @@ fn entry_for(values: Vec<String>) -> Entry {
         request_uri:      values[8].to_string(),
         status_code:      values[9].to_string(),
         error_code:       values[10].to_string(),
-        bytes_sent:       values[11].to_string(),
-        object_size:      values[12].to_string(),
-        total_time:       values[13].to_string(),
-        turn_around_time: values[14].to_string(),
+        bytes_sent:       from_str::<uint>(values[11].as_slice()).unwrap_or(0u),
+        object_size:      from_str::<uint>(values[12].as_slice()).unwrap_or(0u),
+        total_time:       from_str::<uint>(values[13].as_slice()).unwrap_or(0u),
+        turn_around_time: from_str::<uint>(values[14].as_slice()).unwrap_or(0u),
         referrer:         values[15].to_string(),
         user_agent:       values[16].to_string(),
         version_id:       values[17].to_string(),
@@ -52,7 +52,7 @@ fn entry_for(values: Vec<String>) -> Entry {
 }
 
 fn process(entry: &Entry) -> uint {
-    let value = from_str::<uint>(entry.bytes_sent.as_slice()).unwrap_or(0u);
+    let value = entry.bytes_sent;
     //println!("Value is: {}", value);
     value
 }
