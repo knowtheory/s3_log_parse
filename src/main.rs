@@ -65,6 +65,7 @@ fn main() {
             println!("Log file exists at \"{}\"", path.display());
             let mut file = BufferedReader::new(File::open(&path));
 
+            let mut count = 0u;
             let mut total = 0u;
             let mut entries = Vec::new();
             let mut tokens = Vec::new();
@@ -75,28 +76,40 @@ fn main() {
                 let c = c_wrap.unwrap();
 
                 if c == '\n' {
+                    //println!("Final line token: \"{}\", and terminator is: '{}'", token, terminator);
                     tokens.push(token.clone());
-                    entries.push(entry_for(tokens.clone()));
+                    if !(tokens.len() < 17) { 
+                        entries.push(entry_for(tokens.clone())); 
+                    } else {
+                        println!("Parsing error for: {}", tokens);
+                    }
                     token.truncate(0);
                     //println!("{}", tokens);
                     tokens.truncate(0);
-                    if entries.len() == 100 {
+                    if entries.len() >= 1000 {
                         for entry in entries.iter() { total += process(entry); }
+                        entries.truncate(0);
+                        count += 1000;
+                        println!("Running Count: {}", count);
+                        //println!("Running total: {}", total);
                     }
+                    terminator = ' ' // guarantee that a newline terminates the line.
                 } else if skip_next {
                     skip_next = false;
                 } else if c == terminator {
-                    if terminator != ' ' { 
-                        skip_next = true;
-                        terminator = ' ';
-                    }
+                    //println!("Terminating token \"{}\" with '{}'", token, terminator)
+                    //if c == '"' { println!("Closing Quote! (Token is: \"{}\" and terminator: '{}')", token, terminator); }
+                    if terminator != ' ' { skip_next = true; }
+                    terminator = ' ';
                     //println!("\"{}\"",token);
                     tokens.push(token.clone());
                     token.truncate(0);
-                } else if c == '[' {
+                } else if c == '[' && terminator == ' ' {
                     terminator = ']';
-                } else if c == '"' {
+                } else if c == '"' && terminator == ' '  {
+                    //println!("WTF? '{}' ==? '{}'", terminator, c);
                     terminator = '"';
+                    //println!("Open Quote! (Token is: \"{}\" and terminator: '{}')", token, terminator);
                 } else {
                     token.push(c);
                 }
