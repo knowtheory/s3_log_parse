@@ -1,25 +1,24 @@
 extern crate getopts;
 extern crate time;
-extern crate postgres;
+extern crate csv;
+extern crate rustc_serialize;
+extern crate chrono;
 
 use getopts::{optopt,optflag,getopts,OptGroup};
 
-use std::os;
-use std::io::fs::PathExtensions;
-use std::io::BufferedReader;
-use std::io::File;
+use std::env;
+use std::path::Path;
+use std::fs::File;
+use std::error::Error;
+use std::io::prelude::*;
 
-use std::fmt;
+use chrono::*;
 
-use time::{Timespec, Tm};
-
-use postgres::{PostgresConnection, NoSsl};
-use postgres::types::ToSql;
-
+#[derive(RustcEncodable)]
 struct Entry {
       bucket_owner:     String,
       bucket:           String,
-      time:             Tm,
+      time:             DateTime<FixedOffset>,
       remote_ip:        String,
       requester:        String,
       request_id:       String,
@@ -39,12 +38,12 @@ struct Entry {
 
 impl Entry {
     fn new(values: Vec<String>) -> Entry {
-        if values.len() <= 17 { println!("Incorrect number of fields in: {}", values); }
+        if values.len() <= 17 { println!("Incorrect number of fields in: {:?}", values); }
         //println!("{}", values.len());
         Entry {
             bucket_owner:     values[0].to_string(),
             bucket:           values[1].to_string(),
-            time:             time::strptime(values[2].as_slice(), "%d/%b/%Y:%H:%M:%S %z").unwrap(),
+            time:             DateTime::parse_from_str(&values[2], "%d/%b/%Y:%H:%M:%S %z").unwrap(),
             remote_ip:        values[3].to_string(),
             requester:        values[4].to_string(),
             request_id:       values[5].to_string(),
@@ -53,10 +52,10 @@ impl Entry {
             request_uri:      values[8].to_string(),
             status_code:      values[9].to_string(),
             error_code:       values[10].to_string(),
-            bytes_sent:       from_str(values[11].as_slice()).unwrap_or(0),
-            object_size:      from_str(values[12].as_slice()).unwrap_or(0),
-            total_time:       from_str(values[13].as_slice()).unwrap_or(0),
-            turn_around_time: from_str(values[14].as_slice()).unwrap_or(0),
+            bytes_sent:       (values[11].to_string()).parse::<i32>().unwrap_or(0),
+            object_size:      (values[12].to_string()).parse::<i32>().unwrap_or(0),
+            total_time:       (values[13].to_string()).parse::<i32>().unwrap_or(0),
+            turn_around_time: (values[14].to_string()).parse::<i32>().unwrap_or(0),
             referrer:         values[15].to_string(),
             user_agent:       values[16].to_string(),
             version_id:       values[17].to_string(),
@@ -64,63 +63,32 @@ impl Entry {
     }
 }
 
-impl fmt::Show for Entry {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "ENTRY[\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"]", self.bucket_owner, self.bucket, self.time, self.remote_ip, self.requester, self.request_id, self.operation, self.aws_key, self.request_uri, self.status_code, self.error_code, self.bytes_sent, self.object_size, self.total_time, self.turn_around_time, self.referrer, self.user_agent, self.version_id )
-    }
-}
-
-fn insert_entry(conn: &PostgresConnection, entry: &Entry) {
-    let statement = conn.prepare("insert into entries (bucket_owner, bucket, time, remote_ip, requester, request_id, operation, aws_key, request_uri, status_code, error_code, bytes_sent, object_size, total_time, turn_around_time, referrer, user_agent, version_id) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)").unwrap();
-    
-    let result = statement.execute(&[
-        &entry.bucket_owner,
-        &entry.bucket,
-        &entry.time.to_timespec(),
-        &entry.remote_ip,
-        &entry.requester,
-        &entry.request_id,
-        &entry.operation,
-        &entry.aws_key,
-        &entry.request_uri,
-        &entry.status_code,
-        &entry.error_code,
-        &entry.bytes_sent,
-        &entry.object_size,
-        &entry.total_time,
-        &entry.turn_around_time,
-        &entry.referrer,
-        &entry.user_agent,
-        &entry.version_id,
-    ]);
-    match result {
-        Ok(x) => (),
-        Err(x) => println!("{} for entry {}", x, &entry),
-    };
-}
-
-fn count_rows(conn: &PostgresConnection) {
-    let statement = conn.prepare("select count(*) from entries;").unwrap();
-    for res in statement.query([]).unwrap() {
-        let result : Option<i64> = res.get(0);
-        match result {
-            Some(x) => println!("Derp? {}", x),
-            None => println!("What went wrong?! {}", result),
-        }
-    }
-}
+//impl fmt::Show for Entry {
+//    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+//        write!(fmt, "ENTRY[\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"]", self.bucket_owner, self.bucket, self.time, self.remote_ip, self.requester, self.request_id, self.operation, self.aws_key, self.request_uri, self.status_code, self.error_code, self.bytes_sent, self.object_size, self.total_time, self.turn_around_time, self.referrer, self.user_agent, self.version_id )
+//    }
+//}
 
 fn main() {
-    let args: Vec<String> = os::args();
+    let args: Vec<String> = env::args().collect();
     if args.len() > 1 {
-        let path = Path::new(args[1].clone());
+        let path = Path::new(&args[1]);
         if path.exists() {
             println!("Log file exists at \"{}\"", path.display());
-            let mut file = BufferedReader::new(File::open(&path));
+            let display = path.display();
+            let mut file = match File::open(&path) {
+                // The `description` method of `io::Error` returns a string that
+                // describes the error
+                Err(why) => panic!("couldn't open {}: {}", display, Error::description(&why)),
+                Ok(file) => file,
+            };
+            //let conn = PostgresConnection::connect("postgresql://ted@localhost:5432/dcloud_s3_analytics",&NoSsl).unwrap();
+            let mut output_csv  = match csv::Writer::from_file(Path::new("./output.csv")) {
+                Err(why) => panic!("couldn't open {}: {}", display, Error::description(&why)),
+                Ok(file) => file,
+            };
 
-            let conn = PostgresConnection::connect("postgresql://ted@localhost:5432/dcloud_s3_analytics",&NoSsl).unwrap();
-
-            let mut count = 0u;
+            let mut count = 0;
             let mut entries = Vec::new();
             let mut tokens = Vec::new();
             let mut token = String::new();
@@ -136,13 +104,13 @@ fn main() {
                     if !(tokens.len() < 17) { 
                         entries.push(Entry::new(tokens.clone())); 
                     } else {
-                        println!("Parsing error for: {}", tokens);
+                        println!("Parsing error for: {:?}", tokens);
                     }
                     token.truncate(0);
-                    //println!("{}", tokens);
+                    //println!("{:?}", tokens);
                     tokens.truncate(0);
                     if entries.len() >= 10000 {
-                        for entry in entries.iter() { insert_entry(&conn, entry); }
+                        for entry in entries.iter() { output_csv.encode(entry); }
                         entries.truncate(0);
                         count += 10000;
                         //count_rows(&conn);
@@ -169,7 +137,7 @@ fn main() {
                     token.push(c);
                 }
             }
-            for entry in entries.iter() { insert_entry(&conn, entry); }
+            for entry in entries.iter() { output_csv.encode(entry); }
             //count_rows(&conn);
         } else {
             println!("Log file doesn't exist at \"{}\"", path.display());
