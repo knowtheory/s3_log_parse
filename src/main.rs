@@ -1,16 +1,18 @@
-extern crate getopts;
+#![feature(io)]
+
 extern crate time;
 extern crate csv;
 extern crate rustc_serialize;
 extern crate chrono;
 
-use getopts::{optopt,optflag,getopts,OptGroup};
-
 use std::env;
-use std::path::Path;
+use std::path::*;
 use std::fs::File;
+use std::fs::metadata;
 use std::error::Error;
 use std::io::prelude::*;
+use std::io::BufReader;
+use std::io::BufWriter;
 
 use chrono::*;
 
@@ -18,7 +20,7 @@ use chrono::*;
 struct Entry {
       bucket_owner:     String,
       bucket:           String,
-      time:             DateTime<FixedOffset>,
+      time:             String,
       remote_ip:        String,
       requester:        String,
       request_id:       String,
@@ -43,7 +45,7 @@ impl Entry {
         Entry {
             bucket_owner:     values[0].to_string(),
             bucket:           values[1].to_string(),
-            time:             DateTime::parse_from_str(&values[2], "%d/%b/%Y:%H:%M:%S %z").unwrap(),
+            time:             DateTime::parse_from_str(&values[2], "%d/%b/%Y:%H:%M:%S %z").unwrap().to_string(),
             remote_ip:        values[3].to_string(),
             requester:        values[4].to_string(),
             request_id:       values[5].to_string(),
@@ -63,30 +65,29 @@ impl Entry {
     }
 }
 
-//impl fmt::Show for Entry {
-//    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-//        write!(fmt, "ENTRY[\"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"]", self.bucket_owner, self.bucket, self.time, self.remote_ip, self.requester, self.request_id, self.operation, self.aws_key, self.request_uri, self.status_code, self.error_code, self.bytes_sent, self.object_size, self.total_time, self.turn_around_time, self.referrer, self.user_agent, self.version_id )
-//    }
-//}
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 {
         let path = Path::new(&args[1]);
-        if path.exists() {
+        if metadata(path).map(|m| m.is_file()).unwrap_or(false) {
             println!("Log file exists at \"{}\"", path.display());
             let display = path.display();
-            let mut file = match File::open(&path) {
+            let raw_file = match File::open(&path) {
                 // The `description` method of `io::Error` returns a string that
                 // describes the error
                 Err(why) => panic!("couldn't open {}: {}", display, Error::description(&why)),
                 Ok(file) => file,
             };
-            //let conn = PostgresConnection::connect("postgresql://ted@localhost:5432/dcloud_s3_analytics",&NoSsl).unwrap();
-            let mut output_csv  = match csv::Writer::from_file(Path::new("./output.csv")) {
+            let file = BufReader::new(&raw_file);
+            let mut path_buf = path.to_path_buf();
+            path_buf.set_extension("csv");
+            let out_path = path_buf.as_path();
+            let f = match File::create(out_path) {
                 Err(why) => panic!("couldn't open {}: {}", display, Error::description(&why)),
                 Ok(file) => file,
             };
+            let buf_write = BufWriter::new(&f);
+            let mut output_csv  = csv::Writer::from_buffer(buf_write);
 
             let mut count = 0;
             let mut entries = Vec::new();
@@ -110,7 +111,9 @@ fn main() {
                     //println!("{:?}", tokens);
                     tokens.truncate(0);
                     if entries.len() >= 10000 {
-                        for entry in entries.iter() { output_csv.encode(entry); }
+                        for entry in entries.iter() { 
+                            output_csv.encode(entry);
+                        }
                         entries.truncate(0);
                         count += 10000;
                         //count_rows(&conn);
@@ -137,7 +140,9 @@ fn main() {
                     token.push(c);
                 }
             }
-            for entry in entries.iter() { output_csv.encode(entry); }
+            for entry in entries.iter() {
+                output_csv.encode(entry);
+            }
             //count_rows(&conn);
         } else {
             println!("Log file doesn't exist at \"{}\"", path.display());
