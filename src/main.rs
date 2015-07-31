@@ -70,7 +70,7 @@ fn main() {
     if args.len() > 1 {
         let path = Path::new(&args[1]);
         if metadata(path).map(|m| m.is_file()).unwrap_or(false) {
-            println!("Log file exists at \"{}\"", path.display());
+            println!("Parsing log file \"{}\"", path.display());
             let display = path.display();
             let raw_file = match File::open(&path) {
                 // The `description` method of `io::Error` returns a string that
@@ -82,6 +82,7 @@ fn main() {
             let mut path_buf = path.to_path_buf();
             path_buf.set_extension("csv");
             let out_path = path_buf.as_path();
+            println!("outputing to {:?}", out_path);
             let f = match File::create(out_path) {
                 Err(why) => panic!("couldn't open {}: {}", display, Error::description(&why)),
                 Ok(file) => file,
@@ -89,8 +90,6 @@ fn main() {
             let buf_write = BufWriter::new(&f);
             let mut output_csv  = csv::Writer::from_buffer(buf_write);
 
-            let mut count = 0;
-            let mut entries = Vec::new();
             let mut tokens = Vec::new();
             let mut token = String::new();
             let mut terminator = ' ';
@@ -103,22 +102,13 @@ fn main() {
                     //println!("Final line token: \"{}\", and terminator is: '{}'", token, terminator);
                     tokens.push(token.clone());
                     if !(tokens.len() < 17) { 
-                        entries.push(Entry::new(tokens.clone())); 
+                        output_csv.encode(Entry::new(tokens.clone()));
                     } else {
                         println!("Parsing error for: {:?}", tokens);
                     }
                     token.truncate(0);
                     //println!("{:?}", tokens);
                     tokens.truncate(0);
-                    if entries.len() >= 10000 {
-                        for entry in entries.iter() { 
-                            output_csv.encode(entry);
-                        }
-                        entries.truncate(0);
-                        count += 10000;
-                        //count_rows(&conn);
-                        //println!("Running total: {}", total);
-                    }
                     terminator = ' '; // guarantee that a newline terminates the line.
                 } else if skip_next {
                     skip_next = false;
@@ -136,14 +126,9 @@ fn main() {
                     //println!("WTF? '{}' ==? '{}'", terminator, c);
                     terminator = '"';
                     //println!("Open Quote! (Token is: \"{}\" and terminator: '{}')", token, terminator);
-                } else {
-                    token.push(c);
-                }
+                } else { token.push(c); }
             }
-            for entry in entries.iter() {
-                output_csv.encode(entry);
-            }
-            //count_rows(&conn);
+            if tokens.len() == 18 { output_csv.encode(Entry::new(tokens.clone())); } else if tokens.len() > 0 { println!("odd number of tokens."); }
         } else {
             println!("Log file doesn't exist at \"{}\"", path.display());
         }
